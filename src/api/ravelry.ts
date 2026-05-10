@@ -11,8 +11,24 @@ interface CacheEntry {
   timestamp: number;
 }
 
+function base64Encode(str: string): string {
+  // React Native doesn't have btoa, so we encode manually
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  let output = '';
+  for (let i = 0; i < str.length; i += 3) {
+    const a = str.charCodeAt(i);
+    const b = i + 1 < str.length ? str.charCodeAt(i + 1) : 0;
+    const c = i + 2 < str.length ? str.charCodeAt(i + 2) : 0;
+    output += chars[a >> 2];
+    output += chars[((a & 3) << 4) | (b >> 4)];
+    output += i + 1 < str.length ? chars[((b & 15) << 2) | (c >> 6)] : '=';
+    output += i + 2 < str.length ? chars[c & 63] : '=';
+  }
+  return output;
+}
+
 function buildAuthHeader(username: string, password: string): string {
-  return 'Basic ' + btoa(`${username}:${password}`);
+  return 'Basic ' + base64Encode(`${username}:${password}`);
 }
 
 async function getCached(key: string): Promise<PatternSearchResult | null> {
@@ -37,13 +53,14 @@ export async function searchPatterns(params: {
   weight: YarnWeight;
   maxYardage: number;
   freeOnly: boolean;
+  category?: string;
   page?: number;
   pageSize?: number;
 }): Promise<PatternSearchResult> {
-  const { username, password, weight, maxYardage, freeOnly, page = 1, pageSize = 20 } = params;
+  const { username, password, weight, maxYardage, freeOnly, category, page = 1, pageSize = 20 } = params;
 
   const ravelryWeight = RAVELRY_WEIGHT_MAP[weight] ?? weight.toLowerCase();
-  const cacheKey = `patterns_${ravelryWeight}_${maxYardage}_${freeOnly}_${page}`;
+  const cacheKey = `patterns_${ravelryWeight}_${maxYardage}_${freeOnly}_${category ?? 'all'}_${page}_${pageSize}`;
 
   const cached = await getCached(cacheKey);
   if (cached) return cached;
@@ -59,6 +76,10 @@ export async function searchPatterns(params: {
 
   if (freeOnly) {
     queryParams.set('availability', 'free');
+  }
+
+  if (category) {
+    queryParams.set('pc', category);
   }
 
   const response = await fetch(`${BASE_URL}/patterns/search.json?${queryParams}`, {
@@ -87,6 +108,59 @@ export async function getPatternDetails(params: {
   const { username, password, patternId } = params;
 
   const response = await fetch(`${BASE_URL}/patterns/${patternId}.json`, {
+    headers: {
+      Authorization: buildAuthHeader(username, password),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Ravelry API error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export interface RavelryYarn {
+  id: number;
+  name: string;
+  permalink: string;
+  yarn_company_name: string;
+  yardage?: number;
+  grams?: number;
+  yarn_weight?: { name: string };
+  fiber_content?: string;
+  first_photo?: { small_url: string };
+}
+
+export interface YarnSearchResult {
+  yarns: RavelryYarn[];
+  paginator: {
+    results: number;
+    page: number;
+    last_page: number;
+  };
+}
+
+export async function searchYarns(params: {
+  username: string;
+  password: string;
+  query: string;
+  page?: number;
+}): Promise<YarnSearchResult> {
+  const { username, password, query, page = 1 } = params;
+
+  if (!query.trim()) {
+    return { yarns: [], paginator: { results: 0, page: 1, last_page: 1 } };
+  }
+
+  const queryParams = new URLSearchParams({
+    query: query.trim(),
+    page: String(page),
+    page_size: '10',
+    sort: 'best',
+  });
+
+  const response = await fetch(`${BASE_URL}/yarns/search.json?${queryParams}`, {
     headers: {
       Authorization: buildAuthHeader(username, password),
     },

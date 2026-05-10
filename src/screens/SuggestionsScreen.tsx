@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Linking,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { useYarnStore } from '../store/yarnStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -16,6 +17,24 @@ import { searchPatterns } from '../api/ravelry';
 import { THEME } from '../constants/colors';
 import { PatternSuggestion, RavelryPattern } from '../types/pattern';
 import { YarnEntry } from '../types/yarn';
+
+const CATEGORIES = [
+  { label: 'All', value: '' },
+  { label: 'Sweaters', value: 'sweater' },
+  { label: 'Hats', value: 'hat' },
+  { label: 'Scarves', value: 'scarf' },
+  { label: 'Shawls', value: 'shawl-wrap' },
+  { label: 'Socks', value: 'socks' },
+  { label: 'Mittens', value: 'mittens' },
+  { label: 'Blankets', value: 'blanket' },
+  { label: 'Home Decor', value: 'home' },
+  { label: 'Bags', value: 'bag' },
+  { label: 'Toys', value: 'softies' },
+  { label: 'Baby & Kids', value: 'baby' },
+  { label: 'Tops', value: 'top' },
+  { label: 'Cardigan', value: 'cardigan' },
+  { label: 'Cowl', value: 'cowl' },
+] as const;
 
 function PatternCard({ suggestion }: { suggestion: PatternSuggestion }) {
   const { pattern, matchedYarn } = suggestion;
@@ -69,21 +88,23 @@ function PatternCard({ suggestion }: { suggestion: PatternSuggestion }) {
 
 export default function SuggestionsScreen() {
   const { yarns, isLoaded, loadYarns } = useYarnStore();
-  const { ravelryUsername, ravelryPassword, freeOnly, isLoaded: settingsLoaded, loadSettings, hasRavelryCredentials } = useSettingsStore();
+  const { ravelryUsername, ravelryPassword, freeOnly, hasRavelryCredentials } = useSettingsStore();
 
   const [suggestions, setSuggestions] = useState<PatternSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState('');
 
   useEffect(() => {
     loadYarns();
-    loadSettings();
   }, []);
 
-  const fetchSuggestions = useCallback(async (isRefresh = false) => {
+  const fetchSuggestions = useCallback(async (isRefresh = false, category?: string) => {
     if (!hasRavelryCredentials()) return;
     if (yarns.length === 0) return;
+
+    const categoryToUse = category ?? selectedCategory;
 
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
@@ -99,7 +120,8 @@ export default function SuggestionsScreen() {
           weight: yarn.weight,
           maxYardage: yarn.yardageEstimate,
           freeOnly,
-          pageSize: 10,
+          category: categoryToUse || undefined,
+          pageSize: 50,
         });
 
         for (const pattern of result.patterns) {
@@ -132,15 +154,20 @@ export default function SuggestionsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [yarns, ravelryUsername, ravelryPassword, freeOnly]);
+  }, [yarns, ravelryUsername, ravelryPassword, freeOnly, selectedCategory]);
 
   useEffect(() => {
-    if (isLoaded && settingsLoaded && hasRavelryCredentials() && yarns.length > 0) {
+    if (isLoaded && hasRavelryCredentials() && yarns.length > 0) {
       fetchSuggestions();
     }
-  }, [isLoaded, settingsLoaded, yarns.length]);
+  }, [isLoaded, yarns.length]);
 
-  if (!isLoaded || !settingsLoaded) {
+  const handleCategoryChange = (value: string) => {
+    setSelectedCategory(value);
+    fetchSuggestions(false, value);
+  };
+
+  if (!isLoaded) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={THEME.primary} />
@@ -154,7 +181,7 @@ export default function SuggestionsScreen() {
         <Text style={styles.emptyIcon}>🔑</Text>
         <Text style={styles.emptyTitle}>Ravelry API not configured</Text>
         <Text style={styles.emptySubtitle}>
-          Go to Settings and enter your Ravelry username and personal key to get pattern suggestions.
+          Add your credentials to src/config/local.ts to get pattern suggestions.
         </Text>
       </View>
     );
@@ -168,15 +195,6 @@ export default function SuggestionsScreen() {
         <Text style={styles.emptySubtitle}>
           Add some yarn to your stash first, then we'll find patterns that match!
         </Text>
-      </View>
-    );
-  }
-
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={THEME.primary} />
-        <Text style={styles.loadingText}>Finding patterns for your stash...</Text>
       </View>
     );
   }
@@ -196,27 +214,63 @@ export default function SuggestionsScreen() {
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={suggestions}
-        keyExtractor={(item) => `${item.pattern.id}-${item.matchedYarn.id}`}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => <PatternCard suggestion={item} />}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => fetchSuggestions(true)}
-            tintColor={THEME.primary}
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.center}>
-            <Text style={styles.emptyTitle}>No patterns found</Text>
-            <Text style={styles.emptySubtitle}>
-              Try adjusting your stash entries or filters.
-            </Text>
-          </View>
-        }
-      />
+      {/* Category filter bar */}
+      <View style={styles.filterBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScroll}
+        >
+          {CATEGORIES.map((cat) => (
+            <TouchableOpacity
+              key={cat.value}
+              style={[
+                styles.filterChip,
+                selectedCategory === cat.value && styles.filterChipActive,
+              ]}
+              onPress={() => handleCategoryChange(cat.value)}
+            >
+              <Text
+                style={[
+                  styles.filterChipText,
+                  selectedCategory === cat.value && styles.filterChipTextActive,
+                ]}
+              >
+                {cat.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={THEME.primary} />
+          <Text style={styles.loadingText}>Finding patterns for your stash...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={suggestions}
+          keyExtractor={(item) => `${item.pattern.id}-${item.matchedYarn.id}`}
+          contentContainerStyle={styles.list}
+          renderItem={({ item }) => <PatternCard suggestion={item} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => fetchSuggestions(true)}
+              tintColor={THEME.primary}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyList}>
+              <Text style={styles.emptyTitle}>No patterns found</Text>
+              <Text style={styles.emptySubtitle}>
+                Try a different category or adjust your stash entries.
+              </Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -232,6 +286,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
     backgroundColor: THEME.background,
+  },
+  filterBar: {
+    backgroundColor: THEME.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.border,
+    paddingVertical: 10,
+  },
+  filterScroll: {
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 18,
+    backgroundColor: THEME.background,
+    borderWidth: 1,
+    borderColor: THEME.border,
+  },
+  filterChipActive: {
+    backgroundColor: THEME.primary,
+    borderColor: THEME.primary,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: THEME.text,
+  },
+  filterChipTextActive: {
+    color: '#fff',
   },
   list: {
     padding: 16,
@@ -329,6 +413,10 @@ const styles = StyleSheet.create({
     color: THEME.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  emptyList: {
+    paddingTop: 60,
+    alignItems: 'center',
   },
   loadingText: {
     marginTop: 12,

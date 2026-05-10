@@ -30,6 +30,12 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# Claude Code
+.claude/
+
+# Local config (API credentials)
+src/config/local.ts
+
 # local env files
 .env*.local
 

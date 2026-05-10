@@ -1,0 +1,11 @@
+// Copy this file to local.ts and add your Ravelry API credentials.
+// local.ts is gitignored and will not be committed.
+//
+// To get credentials:
+// 1. Create a Ravelry account at https://www.ravelry.com
+// 2. Go to https://www.ravelry.com/pro/developer
+// 3. Create a new app with Basic Auth, read-only access
+// 4. Copy your username and personal key below
+
+export const RAVELRY_USERNAME = '';
+export const RAVELRY_PASSWORD = '';

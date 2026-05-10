@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,15 @@ import {
   StyleSheet,
   Alert,
   Image,
+  ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { useYarnStore } from '../store/yarnStore';
+import { useSettingsStore } from '../store/settingsStore';
+import { searchYarns, RavelryYarn } from '../api/ravelry';
 import { THEME, COLOR_SWATCH_MAP } from '../constants/colors';
 import { StashStackParamList } from '../navigation/AppNavigator';
 import {
@@ -74,8 +78,24 @@ function SelectorGrid<T extends string>({
   );
 }
 
+// Map Ravelry weight names to our weight enum
+function mapRavelryWeight(ravelryWeight?: string): YarnWeight | null {
+  if (!ravelryWeight) return null;
+  const lower = ravelryWeight.toLowerCase();
+  if (lower.includes('lace')) return 'lace';
+  if (lower.includes('fingering')) return 'fingering';
+  if (lower.includes('sport')) return 'sport';
+  if (lower.includes('dk')) return 'DK';
+  if (lower.includes('worsted')) return 'worsted';
+  if (lower.includes('aran')) return 'aran';
+  if (lower.includes('bulky') && !lower.includes('super')) return 'bulky';
+  if (lower.includes('super bulky') || lower.includes('super-bulky')) return 'super-bulky';
+  return null;
+}
+
 export default function AddYarnScreen({ navigation, route }: Props) {
   const { addYarn, updateYarn, yarns } = useYarnStore();
+  const { ravelryUsername, ravelryPassword, hasRavelryCredentials } = useSettingsStore();
   const editId = route.params && 'yarnId' in route.params ? route.params.yarnId : null;
   const existingYarn = editId ? yarns.find((y) => y.id === editId) : null;
 
@@ -95,6 +115,62 @@ export default function AddYarnScreen({ navigation, route }: Props) {
   const [photoUri, setPhotoUri] = useState<string | undefined>(
     existingYarn?.photoUri
   );
+  const [numberOfBalls, setNumberOfBalls] = useState('1');
+
+  // Yarn search state
+  const [yarnSearchQuery, setYarnSearchQuery] = useState('');
+  const [yarnSearchResults, setYarnSearchResults] = useState<RavelryYarn[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedRavelryYarn, setSelectedRavelryYarn] = useState<RavelryYarn | null>(null);
+  const [yardagePerBall, setYardagePerBall] = useState<number | null>(null);
+
+  const handleYarnSearch = useCallback(async () => {
+    if (!yarnSearchQuery.trim() || !hasRavelryCredentials()) return;
+    setSearching(true);
+    try {
+      const result = await searchYarns({
+        username: ravelryUsername,
+        password: ravelryPassword,
+        query: yarnSearchQuery.trim(),
+      });
+      setYarnSearchResults(result.yarns);
+    } catch (err: any) {
+      Alert.alert('Search failed', err.message);
+    } finally {
+      setSearching(false);
+    }
+  }, [yarnSearchQuery, ravelryUsername, ravelryPassword]);
+
+  const selectRavelryYarn = (yarn: RavelryYarn) => {
+    setSelectedRavelryYarn(yarn);
+    setYarnSearchResults([]);
+    setYarnSearchQuery('');
+
+    // Auto-fill fields from Ravelry data
+    if (!name) {
+      setName(`${yarn.yarn_company_name} ${yarn.name}`);
+    }
+
+    if (yarn.yardage) {
+      setYardagePerBall(yarn.yardage);
+      const balls = parseInt(numberOfBalls, 10) || 1;
+      setYardage(String(yarn.yardage * balls));
+    }
+
+    const mappedWeight = mapRavelryWeight(yarn.yarn_weight?.name);
+    if (mappedWeight) {
+      setWeight(mappedWeight);
+    }
+  };
+
+  // Recalculate yardage when number of balls changes
+  const handleBallsChange = (value: string) => {
+    setNumberOfBalls(value);
+    if (yardagePerBall) {
+      const balls = parseInt(value, 10) || 0;
+      setYardage(String(yardagePerBall * balls));
+    }
+  };
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -154,7 +230,77 @@ export default function AddYarnScreen({ navigation, route }: Props) {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      {/* Yarn Lookup Section */}
+      {hasRavelryCredentials() && (
+        <View style={styles.lookupSection}>
+          <Text style={styles.label}>Look up yarn (optional)</Text>
+          <Text style={styles.helperText}>
+            Search by brand and yarn name to auto-fill weight and yardage
+          </Text>
+          <View style={styles.searchRow}>
+            <TextInput
+              style={[styles.textInput, styles.searchInput]}
+              placeholder='e.g. "Malabrigo Rios"'
+              placeholderTextColor={THEME.textSecondary}
+              value={yarnSearchQuery}
+              onChangeText={setYarnSearchQuery}
+              onSubmitEditing={handleYarnSearch}
+              returnKeyType="search"
+            />
+            <TouchableOpacity
+              style={styles.searchButton}
+              onPress={handleYarnSearch}
+              disabled={searching}
+            >
+              {searching ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.searchButtonText}>Search</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {yarnSearchResults.length > 0 && (
+            <View style={styles.searchResults}>
+              {yarnSearchResults.map((yarn) => (
+                <TouchableOpacity
+                  key={yarn.id}
+                  style={styles.searchResultItem}
+                  onPress={() => selectRavelryYarn(yarn)}
+                >
+                  {yarn.first_photo?.small_url && (
+                    <Image
+                      source={{ uri: yarn.first_photo.small_url }}
+                      style={styles.searchResultImage}
+                    />
+                  )}
+                  <View style={styles.searchResultInfo}>
+                    <Text style={styles.searchResultName} numberOfLines={1}>
+                      {yarn.name}
+                    </Text>
+                    <Text style={styles.searchResultMeta} numberOfLines={1}>
+                      {yarn.yarn_company_name}
+                      {yarn.yardage ? ` · ${yarn.yardage} yds/skein` : ''}
+                      {yarn.yarn_weight?.name ? ` · ${yarn.yarn_weight.name}` : ''}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {selectedRavelryYarn && (
+            <View style={styles.selectedYarnBadge}>
+              <Text style={styles.selectedYarnText}>
+                Using: {selectedRavelryYarn.yarn_company_name} {selectedRavelryYarn.name}
+                {yardagePerBall ? ` (${yardagePerBall} yds/skein)` : ''}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>Name</Text>
         <TextInput
@@ -219,16 +365,42 @@ export default function AddYarnScreen({ navigation, route }: Props) {
         onSelect={setFiberType}
       />
 
+      {/* Yardage section */}
       <View style={styles.fieldGroup}>
-        <Text style={styles.label}>Estimated Yardage</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="e.g. 220"
-          placeholderTextColor={THEME.textSecondary}
-          value={yardage}
-          onChangeText={setYardage}
-          keyboardType="numeric"
-        />
+        <Text style={styles.label}>Yardage</Text>
+        {yardagePerBall ? (
+          <View>
+            <Text style={styles.helperText}>
+              {yardagePerBall} yards per skein — how many skeins do you have?
+            </Text>
+            <View style={styles.ballsRow}>
+              <TextInput
+                style={[styles.textInput, styles.ballsInput]}
+                value={numberOfBalls}
+                onChangeText={handleBallsChange}
+                keyboardType="numeric"
+                placeholder="1"
+              />
+              <Text style={styles.ballsLabel}>
+                skeins = {yardage} yards total
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View>
+            <Text style={styles.helperText}>
+              Enter total estimated yardage, or search for your yarn above to auto-calculate
+            </Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="e.g. 220"
+              placeholderTextColor={THEME.textSecondary}
+              value={yardage}
+              onChangeText={setYardage}
+              keyboardType="numeric"
+            />
+          </View>
+        )}
       </View>
 
       <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
@@ -256,6 +428,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: THEME.text,
+    marginBottom: 8,
+  },
+  helperText: {
+    fontSize: 13,
+    color: THEME.textSecondary,
     marginBottom: 8,
   },
   textInput: {
@@ -340,5 +517,89 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Yarn lookup styles
+  lookupSection: {
+    backgroundColor: THEME.surface,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: THEME.border,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+  },
+  searchButton: {
+    backgroundColor: THEME.primary,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  searchResults: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: THEME.border,
+    paddingTop: 8,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.border,
+    gap: 10,
+  },
+  searchResultImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 4,
+  },
+  searchResultInfo: {
+    flex: 1,
+  },
+  searchResultName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: THEME.text,
+  },
+  searchResultMeta: {
+    fontSize: 12,
+    color: THEME.textSecondary,
+    marginTop: 2,
+  },
+  selectedYarnBadge: {
+    marginTop: 10,
+    backgroundColor: '#F3E8FF',
+    padding: 10,
+    borderRadius: 6,
+  },
+  selectedYarnText: {
+    fontSize: 13,
+    color: THEME.primary,
+    fontWeight: '500',
+  },
+  ballsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  ballsInput: {
+    width: 60,
+    textAlign: 'center',
+  },
+  ballsLabel: {
+    fontSize: 15,
+    color: THEME.text,
   },
 });

@@ -63,12 +63,19 @@ YarnEntry {
 - Pattern cards matched to user's stash, powered by Ravelry
 - Each card: pattern photo, name, designer, rating, yardage needed, matched yarn
 - Tapping opens the Ravelry pattern page
-- Filters: by yarn entry, by category, by free/paid
+- **Category filter bar** — horizontal scrollable chips to filter by garment type:
+  Sweaters, Hats, Scarves, Shawls, Socks, Mittens, Blankets, Home Decor, Bags, Toys, Baby & Kids, Tops, Cardigan, Cowl
+- Free pattern toggle
 - Pull-to-refresh for new suggestions
 
-### 1.6 Settings Screen
-- Ravelry API credentials input (username + personal key)
-- Default filters (free patterns only, preferred categories)
+### 1.6 Yarn Lookup
+- Search Ravelry's yarn database by brand/name
+- Auto-fill weight and yardage per skein from Ravelry data
+- User enters number of skeins → total yardage calculated automatically
+
+### 1.7 Settings Screen
+- Ravelry API connection status
+- Default filters (free patterns only)
 
 ### 1.7 Polish
 - Empty states with friendly messages
@@ -126,7 +133,32 @@ YarnEntry {
 
 ---
 
-## Phase 5: Community & Social Features
+## Phase 5: Pinterest Style Integration
+
+**Goal:** Suggest patterns that match the user's aesthetic by analyzing their Pinterest boards.
+
+### 5.1 Pinterest OAuth
+- Connect Pinterest account via OAuth 2.0 (Pinterest API v5)
+- Request read access to user's boards and pins
+
+### 5.2 Style Analysis
+- Fetch pins from knitting/craft-related boards
+- Use AI (Claude Vision) to analyze pin aesthetics: color palettes, textures, garment styles, complexity level
+- Build a "style profile" — e.g., "minimalist, earth tones, oversized garments, textured stitches"
+
+### 5.3 Style-Aware Suggestions
+- Augment Ravelry pattern search with style preferences derived from Pinterest
+- Filter/rank suggestions by visual similarity to pinned content
+- Show "matches your style" indicator on relevant patterns
+- Allow user to manually adjust their style profile
+
+### 5.4 Mood Board Integration
+- Display a visual mood board generated from their Pinterest pins
+- Side-by-side: "Your Pinterest vibe" → "Patterns that match"
+
+---
+
+## Phase 6: Community & Social Features
 
 - Public stash profiles with shareable links
 - Stash stats dashboard (total yardage, color distribution, weight breakdown)
@@ -135,7 +167,7 @@ YarnEntry {
 
 ---
 
-## Phase 6: Polish & Portfolio Optimization
+## Phase 7: Polish & Portfolio Optimization
 
 - Unit + component + E2E tests
 - GitHub Actions CI/CD
@@ -147,13 +179,14 @@ YarnEntry {
 ## Recommended Build Order
 
 ```
-Phase 1 (MVP + Ravelry)  ██████████░░░░░░░░░░  Weeks 1-3
-Phase 6.2 (README)        ░░░░░░░░░░██░░░░░░░░  Week 3 (do before job apps!)
-Phase 2 (AI Vision)       ░░░░░░░░░░░░████░░░░  Weeks 4-5
-Phase 3 (Multi-Yarn)      ░░░░░░░░░░░░░░██░░░░  Week 6
-Phase 4 (Backend)         ░░░░░░░░░░░░░░░░██░░  Weeks 7-8
-Phase 5 (Social)          ░░░░░░░░░░░░░░░░░░██  Weeks 9+
-Phase 6 (Full Polish)     ░░░░░░░░░░░░░░░░░░██  Ongoing
+Phase 1 (MVP + Ravelry)    ██████████░░░░░░░░░░  Weeks 1-3
+Phase 7 (README)           ░░░░░░░░░░██░░░░░░░░  Week 3 (do before job apps!)
+Phase 2 (AI Vision)        ░░░░░░░░░░░░████░░░░  Weeks 4-5
+Phase 3 (Multi-Yarn)       ░░░░░░░░░░░░░░██░░░░  Week 6
+Phase 4 (Backend)          ░░░░░░░░░░░░░░░░██░░  Weeks 7-8
+Phase 5 (Pinterest Style)  ░░░░░░░░░░░░░░░░░░██  Weeks 9-10
+Phase 6 (Social)           ░░░░░░░░░░░░░░░░░░██  Weeks 11+
+Phase 7 (Full Polish)      ░░░░░░░░░░░░░░░░░░██  Ongoing
 ```
 
 ## Cost Summary
@@ -164,7 +197,8 @@ Phase 6 (Full Polish)     ░░░░░░░░░░░░░░░░░░
 | Ravelry API | Free (non-commercial) | Phase 1 |
 | Claude API | $5 free credit | Phase 2 |
 | Supabase | Free tier | Phase 4 |
+| Pinterest API | Free | Phase 5 |
 | Apple Developer Account | $99/year | Only if publishing to App Store |
-| Vercel/Netlify | Free tier | Phase 6 (web deploy) |
+| Vercel/Netlify | Free tier | Phase 7 (web deploy) |
 
 **Total cost through Phase 4: $0**

@@ -1,111 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
   Switch,
-  Alert,
   ScrollView,
-  Linking,
 } from 'react-native';
 import { useSettingsStore } from '../store/settingsStore';
 import { THEME } from '../constants/colors';
 
 export default function SettingsScreen() {
-  const {
-    ravelryUsername,
-    ravelryPassword,
-    freeOnly,
-    isLoaded,
-    loadSettings,
-    setRavelryCredentials,
-    setFreeOnly,
-    hasRavelryCredentials,
-  } = useSettingsStore();
-
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  useEffect(() => {
-    if (isLoaded) {
-      setUsername(ravelryUsername);
-      setPassword(ravelryPassword);
-    }
-  }, [isLoaded, ravelryUsername, ravelryPassword]);
-
-  const handleSave = async () => {
-    if (!username.trim() || !password.trim()) {
-      Alert.alert('Missing info', 'Please enter both your Ravelry username and personal key.');
-      return;
-    }
-    await setRavelryCredentials(username.trim(), password.trim());
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
+  const { freeOnly, setFreeOnly, hasRavelryCredentials } = useSettingsStore();
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Ravelry API</Text>
-        <Text style={styles.sectionDescription}>
-          Enter your Ravelry API credentials to get pattern suggestions. You can get these from your{' '}
-          <Text
-            style={styles.link}
-            onPress={() => Linking.openURL('https://www.ravelry.com/pro/developer')}
-          >
-            Ravelry Pro/Developer page
-          </Text>
-          .
-        </Text>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Username</Text>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Your Ravelry username"
-            placeholderTextColor={THEME.textSecondary}
-            value={username}
-            onChangeText={setUsername}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Personal Key</Text>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Your read-only personal key"
-            placeholderTextColor={THEME.textSecondary}
-            value={password}
-            onChangeText={setPassword}
-            autoCapitalize="none"
-            autoCorrect={false}
-            secureTextEntry
-          />
-        </View>
-
-        <TouchableOpacity
-          style={[styles.saveButton, saved && styles.savedButton]}
-          onPress={handleSave}
-        >
-          <Text style={styles.saveButtonText}>
-            {saved ? 'Saved!' : 'Save Credentials'}
-          </Text>
-        </TouchableOpacity>
-
-        {hasRavelryCredentials() && (
+        {hasRavelryCredentials() ? (
           <View style={styles.statusRow}>
             <View style={styles.statusDot} />
-            <Text style={styles.statusText}>Ravelry API connected</Text>
+            <Text style={styles.statusText}>Connected</Text>
           </View>
+        ) : (
+          <Text style={styles.warningText}>
+            Not configured. Add your credentials to src/config/local.ts
+          </Text>
         )}
       </View>
 
@@ -161,53 +80,9 @@ const styles = StyleSheet.create({
     color: THEME.text,
     marginBottom: 8,
   },
-  sectionDescription: {
-    fontSize: 14,
-    color: THEME.textSecondary,
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  link: {
-    color: THEME.primary,
-    textDecorationLine: 'underline',
-  },
-  fieldGroup: {
-    marginBottom: 12,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: THEME.text,
-    marginBottom: 6,
-  },
-  textInput: {
-    backgroundColor: THEME.background,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 15,
-    color: THEME.text,
-  },
-  saveButton: {
-    backgroundColor: THEME.primary,
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  savedButton: {
-    backgroundColor: THEME.success,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
     gap: 8,
   },
   statusDot: {
@@ -217,9 +92,13 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.success,
   },
   statusText: {
-    fontSize: 13,
+    fontSize: 14,
     color: THEME.success,
     fontWeight: '500',
+  },
+  warningText: {
+    fontSize: 14,
+    color: THEME.warning,
   },
   toggleRow: {
     flexDirection: 'row',

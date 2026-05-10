@@ -61,12 +61,31 @@ Then:
 - Press `w` for web
 - Press `i` for iOS simulator
 
+### Ravelry API Setup
+
+This app uses the [Ravelry API](https://www.ravelry.com/api) to search for knitting patterns. You'll need free API credentials:
+
+1. Create a [Ravelry](https://www.ravelry.com) account if you don't have one
+2. Go to your [Pro/Developer page](https://www.ravelry.com/pro/developer)
+3. Create a new app — select **Basic Auth** with **read-only** access
+4. Note your **username** and **personal key** (password) from the apps tab
+
 ### Configuration
 
-1. Open the app and go to the **Settings** tab
-2. Enter your Ravelry username and read-only personal key
-3. Toggle "Free patterns only" if desired
-4. Add yarn to your stash and check the **Suggestions** tab
+Create the local config file with your credentials:
+
+```bash
+cp src/config/local.ts.example src/config/local.ts
+```
+
+Then edit `src/config/local.ts`:
+
+```ts
+export const RAVELRY_USERNAME = 'your_ravelry_username';
+export const RAVELRY_PASSWORD = 'your_read_only_personal_key';
+```
+
+This file is gitignored and will not be committed. Alternatively, you can enter credentials through the app's **Settings** tab at runtime.
 
 ## Project Structure
 

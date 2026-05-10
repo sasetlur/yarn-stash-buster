@@ -8,7 +8,7 @@ export const YARN_WEIGHTS = [
 ] as const;
 
 export const FIBER_TYPES = [
-  'wool', 'merino', 'cotton', 'acrylic', 'alpaca', 'silk', 'blend', 'unknown',
+  'wool', 'merino', 'mohair', 'cotton', 'acrylic', 'alpaca', 'silk', 'blend', 'unknown',
 ] as const;
 
 export type ColorFamily = typeof COLOR_FAMILIES[number];
