@@ -13,10 +13,10 @@ import {
 } from 'react-native';
 import { useYarnStore } from '../store/yarnStore';
 import { useSettingsStore } from '../store/settingsStore';
-import { searchPatterns } from '../api/ravelry';
+import { searchPatterns, searchMultiYarnPatterns } from '../api/ravelry';
 import { THEME } from '../constants/colors';
 import { PatternSuggestion, RavelryPattern } from '../types/pattern';
-import { YarnEntry } from '../types/yarn';
+import { YarnEntry, YARN_WEIGHTS } from '../types/yarn';
 
 const CATEGORIES = [
   { label: 'All', value: '' },
@@ -37,8 +37,9 @@ const CATEGORIES = [
 ] as const;
 
 function PatternCard({ suggestion }: { suggestion: PatternSuggestion }) {
-  const { pattern, matchedYarn } = suggestion;
+  const { pattern, matchedYarn, additionalYarns } = suggestion;
   const imageUrl = pattern.first_photo?.medium_url ?? pattern.first_photo?.small_url;
+  const isMultiYarn = additionalYarns && additionalYarns.length > 0;
 
   const openPattern = () => {
     const url = `https://www.ravelry.com/patterns/library/${pattern.permalink}`;
@@ -76,11 +77,20 @@ function PatternCard({ suggestion }: { suggestion: PatternSuggestion }) {
             {pattern.yardage_max ?? pattern.yardage} yards needed
           </Text>
         )}
-        <View style={styles.matchBadge}>
-          <Text style={styles.matchText}>
-            Matches: {matchedYarn.name}
-          </Text>
-        </View>
+        {isMultiYarn ? (
+          <View style={styles.multiMatchBadge}>
+            <Text style={styles.multiMatchTitle}>Combine your yarns:</Text>
+            <Text style={styles.multiMatchText}>
+              {matchedYarn.name} + {additionalYarns.map((y) => y.name).join(' + ')}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.matchBadge}>
+            <Text style={styles.matchText}>
+              Matches: {matchedYarn.name}
+            </Text>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -95,16 +105,18 @@ export default function SuggestionsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [multiYarnMode, setMultiYarnMode] = useState(false);
 
   useEffect(() => {
     loadYarns();
   }, []);
 
-  const fetchSuggestions = useCallback(async (isRefresh = false, category?: string) => {
+  const fetchSuggestions = useCallback(async (isRefresh = false, category?: string, isMulti?: boolean) => {
     if (!hasRavelryCredentials()) return;
     if (yarns.length === 0) return;
 
     const categoryToUse = category ?? selectedCategory;
+    const useMultiYarn = isMulti ?? multiYarnMode;
 
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
@@ -113,26 +125,71 @@ export default function SuggestionsScreen() {
     try {
       const allSuggestions: PatternSuggestion[] = [];
 
-      for (const yarn of yarns) {
-        const result = await searchPatterns({
-          username: ravelryUsername,
-          password: ravelryPassword,
-          weight: yarn.weight,
-          maxYardage: yarn.yardageEstimate,
-          freeOnly,
-          category: categoryToUse || undefined,
-          pageSize: 50,
-        });
+      if (useMultiYarn) {
+        // Generate all unique pairs of yarns (any weight combination)
+        const weightIndex = (w: string) => YARN_WEIGHTS.indexOf(w as any);
 
-        for (const pattern of result.patterns) {
-          allSuggestions.push({
-            pattern,
-            matchedYarn: {
-              id: yarn.id,
-              name: yarn.name,
-              colorFamily: yarn.colorFamily,
-            },
+        for (let i = 0; i < yarns.length; i++) {
+          for (let j = i + 1; j < yarns.length; j++) {
+            const yarnA = yarns[i];
+            const yarnB = yarns[j];
+            const totalYardage = yarnA.yardageEstimate + yarnB.yardageEstimate;
+
+            // Use the heavier weight for the search query
+            const searchWeight = weightIndex(yarnA.weight) >= weightIndex(yarnB.weight)
+              ? yarnA.weight
+              : yarnB.weight;
+
+            const result = await searchMultiYarnPatterns({
+              username: ravelryUsername,
+              password: ravelryPassword,
+              weight: searchWeight,
+              totalYardage,
+              numColors: 2,
+              freeOnly,
+              category: categoryToUse || undefined,
+              pageSize: 20,
+            });
+
+            for (const pattern of result.patterns) {
+              allSuggestions.push({
+                pattern,
+                matchedYarn: {
+                  id: yarnA.id,
+                  name: yarnA.name,
+                  colorFamily: yarnA.colorFamily,
+                },
+                additionalYarns: [{
+                  id: yarnB.id,
+                  name: yarnB.name,
+                  colorFamily: yarnB.colorFamily,
+                }],
+              });
+            }
+          }
+        }
+      } else {
+        for (const yarn of yarns) {
+          const result = await searchPatterns({
+            username: ravelryUsername,
+            password: ravelryPassword,
+            weight: yarn.weight,
+            maxYardage: yarn.yardageEstimate,
+            freeOnly,
+            category: categoryToUse || undefined,
+            pageSize: 50,
           });
+
+          for (const pattern of result.patterns) {
+            allSuggestions.push({
+              pattern,
+              matchedYarn: {
+                id: yarn.id,
+                name: yarn.name,
+                colorFamily: yarn.colorFamily,
+              },
+            });
+          }
         }
       }
 
@@ -154,7 +211,7 @@ export default function SuggestionsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [yarns, ravelryUsername, ravelryPassword, freeOnly, selectedCategory]);
+  }, [yarns, ravelryUsername, ravelryPassword, freeOnly, selectedCategory, multiYarnMode]);
 
   useEffect(() => {
     if (isLoaded && hasRavelryCredentials() && yarns.length > 0) {
@@ -164,8 +221,17 @@ export default function SuggestionsScreen() {
 
   const handleCategoryChange = (value: string) => {
     setSelectedCategory(value);
-    fetchSuggestions(false, value);
+    fetchSuggestions(false, value, multiYarnMode);
   };
+
+  const handleMultiYarnToggle = () => {
+    const newValue = !multiYarnMode;
+    setMultiYarnMode(newValue);
+    fetchSuggestions(false, selectedCategory, newValue);
+  };
+
+  // Show multi-yarn toggle when there are at least 2 yarns to pair
+  const hasMultiYarnPairs = yarns.length >= 2;
 
   if (!isLoaded) {
     return (
@@ -214,6 +280,21 @@ export default function SuggestionsScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Multi-yarn toggle */}
+      {hasMultiYarnPairs && (
+        <View style={styles.multiYarnBar}>
+          <TouchableOpacity
+            style={[styles.multiYarnToggle, multiYarnMode && styles.multiYarnToggleActive]}
+            onPress={handleMultiYarnToggle}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.multiYarnToggleText, multiYarnMode && styles.multiYarnToggleTextActive]}>
+              {multiYarnMode ? 'Showing Multi-Yarn Colorwork' : 'Try Multi-Yarn Matching'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Category filter bar */}
       <View style={styles.filterBar}>
         <ScrollView
@@ -246,7 +327,9 @@ export default function SuggestionsScreen() {
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={THEME.primary} />
-          <Text style={styles.loadingText}>Finding patterns for your stash...</Text>
+          <Text style={styles.loadingText}>
+            {multiYarnMode ? 'Finding colorwork patterns for your yarn combos...' : 'Finding patterns for your stash...'}
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -265,7 +348,9 @@ export default function SuggestionsScreen() {
             <View style={styles.emptyList}>
               <Text style={styles.emptyTitle}>No patterns found</Text>
               <Text style={styles.emptySubtitle}>
-                Try a different category or adjust your stash entries.
+                {multiYarnMode
+                  ? 'No colorwork patterns found for your yarn combinations. Try adding more yarns with matching weights.'
+                  : 'Try a different category or adjust your stash entries.'}
               </Text>
             </View>
           }
@@ -395,6 +480,52 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: THEME.primary,
     fontWeight: '500',
+  },
+  multiMatchBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  multiMatchTitle: {
+    fontSize: 10,
+    color: '#92400E',
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  multiMatchText: {
+    fontSize: 11,
+    color: '#B45309',
+    fontWeight: '500',
+  },
+  multiYarnBar: {
+    backgroundColor: THEME.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.border,
+  },
+  multiYarnToggle: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: THEME.background,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    alignItems: 'center',
+  },
+  multiYarnToggleActive: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+  },
+  multiYarnToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: THEME.textSecondary,
+  },
+  multiYarnToggleTextActive: {
+    color: '#B45309',
   },
   emptyIcon: {
     fontSize: 48,

@@ -100,6 +100,58 @@ export async function searchPatterns(params: {
   return data;
 }
 
+export async function searchMultiYarnPatterns(params: {
+  username: string;
+  password: string;
+  weight: YarnWeight;
+  totalYardage: number;
+  numColors: number;
+  freeOnly: boolean;
+  category?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<PatternSearchResult> {
+  const { username, password, weight, totalYardage, numColors, freeOnly, category, page = 1, pageSize = 20 } = params;
+
+  const ravelryWeight = RAVELRY_WEIGHT_MAP[weight] ?? weight.toLowerCase();
+  const cacheKey = `multi_${ravelryWeight}_${totalYardage}_${numColors}_${freeOnly}_${category ?? 'all'}_${page}_${pageSize}`;
+
+  const cached = await getCached(cacheKey);
+  if (cached) return cached;
+
+  const queryParams = new URLSearchParams({
+    craft: 'knitting',
+    weight: ravelryWeight,
+    yardage: `-${totalYardage}`,
+    'colors-number': String(numColors),
+    sort: 'best',
+    page: String(page),
+    page_size: String(pageSize),
+  });
+
+  if (freeOnly) {
+    queryParams.set('availability', 'free');
+  }
+
+  if (category) {
+    queryParams.set('pc', category);
+  }
+
+  const response = await fetch(`${BASE_URL}/patterns/search.json?${queryParams}`, {
+    headers: {
+      Authorization: buildAuthHeader(username, password),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Ravelry API error: ${response.status}`);
+  }
+
+  const data: PatternSearchResult = await response.json();
+  await setCache(cacheKey, data);
+  return data;
+}
+
 export async function getPatternDetails(params: {
   username: string;
   password: string;

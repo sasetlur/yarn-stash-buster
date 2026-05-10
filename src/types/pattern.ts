@@ -31,4 +31,10 @@ export interface PatternSuggestion {
     name: string;
     colorFamily: string;
   };
+  /** Additional yarns matched for multi-yarn/colorwork patterns */
+  additionalYarns?: Array<{
+    id: string;
+    name: string;
+    colorFamily: string;
+  }>;
 }
