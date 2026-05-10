@@ -1,7 +1,10 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { v4 as uuidv4 } from 'uuid';
 import { YarnEntry, ColorFamily, YarnWeight, FiberType } from '../types/yarn';
+
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
+}
 
 const STORAGE_KEY = '@yarn_stash';
 
@@ -34,7 +37,7 @@ export const useYarnStore = create<YarnStore>((set, get) => ({
   addYarn: async (yarn) => {
     const newYarn: YarnEntry = {
       ...yarn,
-      id: uuidv4(),
+      id: generateId(),
       addedAt: Date.now(),
     };
     const updated = [...get().yarns, newYarn];

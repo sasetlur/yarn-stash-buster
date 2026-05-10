@@ -17,6 +17,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useYarnStore } from '../store/yarnStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { searchYarns, RavelryYarn } from '../api/ravelry';
+import { analyzeYarnPhoto, YarnAnalysis } from '../api/claude';
+import { CLAUDE_API_KEY } from '../config/local';
 import { THEME, COLOR_SWATCH_MAP } from '../constants/colors';
 import { StashStackParamList } from '../navigation/AppNavigator';
 import {
@@ -124,6 +126,11 @@ export default function AddYarnScreen({ navigation, route }: Props) {
   const [selectedRavelryYarn, setSelectedRavelryYarn] = useState<RavelryYarn | null>(null);
   const [yardagePerBall, setYardagePerBall] = useState<number | null>(null);
 
+  // AI analysis state
+  const [analyzing, setAnalyzing] = useState(false);
+  const [aiNotes, setAiNotes] = useState<string | null>(null);
+  const hasClaudeKey = CLAUDE_API_KEY.trim().length > 0;
+
   const handleYarnSearch = useCallback(async () => {
     if (!yarnSearchQuery.trim() || !hasRavelryCredentials()) return;
     setSearching(true);
@@ -169,6 +176,26 @@ export default function AddYarnScreen({ navigation, route }: Props) {
     if (yardagePerBall) {
       const balls = parseInt(value, 10) || 0;
       setYardage(String(yardagePerBall * balls));
+    }
+  };
+
+  const handleAnalyzePhoto = async (uri: string) => {
+    if (!hasClaudeKey) return;
+    setAnalyzing(true);
+    setAiNotes(null);
+    try {
+      const analysis = await analyzeYarnPhoto({
+        apiKey: CLAUDE_API_KEY,
+        photoUri: uri,
+      });
+      setColorFamily(analysis.colorFamily);
+      setWeight(analysis.weight);
+      setFiberType(analysis.fiberType);
+      setAiNotes(analysis.notes);
+    } catch (err: any) {
+      Alert.alert('AI Analysis Failed', err.message);
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -313,16 +340,44 @@ export default function AddYarnScreen({ navigation, route }: Props) {
       </View>
 
       <View style={styles.fieldGroup}>
-        <Text style={styles.label}>Photo (optional)</Text>
+        <Text style={styles.label}>Photo</Text>
         <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
           {photoUri ? (
             <Image source={{ uri: photoUri }} style={styles.photoPreview} />
           ) : (
             <View style={styles.photoPlaceholder}>
               <Text style={styles.photoPlaceholderText}>Tap to add photo</Text>
+              {hasClaudeKey && (
+                <Text style={styles.photoPlaceholderHint}>
+                  AI will detect color, weight, and fiber
+                </Text>
+              )}
             </View>
           )}
         </TouchableOpacity>
+        {photoUri && hasClaudeKey && (
+          <TouchableOpacity
+            style={[styles.analyzeButton, analyzing && styles.analyzeButtonDisabled]}
+            onPress={() => handleAnalyzePhoto(photoUri)}
+            disabled={analyzing}
+          >
+            {analyzing ? (
+              <View style={styles.analyzeRow}>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.analyzeButtonText}>Analyzing yarn...</Text>
+              </View>
+            ) : (
+              <Text style={styles.analyzeButtonText}>Analyze with AI</Text>
+            )}
+          </TouchableOpacity>
+        )}
+        {aiNotes && (
+          <View style={styles.aiResultBadge}>
+            <Text style={styles.aiResultLabel}>AI detected:</Text>
+            <Text style={styles.aiResultText}>{aiNotes}</Text>
+            <Text style={styles.aiResultHint}>Fields below have been pre-filled. Adjust if needed.</Text>
+          </View>
+        )}
       </View>
 
       <SelectorGrid
@@ -447,7 +502,6 @@ const styles = StyleSheet.create({
   optionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
   },
   optionChip: {
     paddingHorizontal: 14,
@@ -456,6 +510,8 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.border,
+    marginRight: 8,
+    marginBottom: 8,
   },
   optionChipSelected: {
     backgroundColor: THEME.primary,
@@ -471,7 +527,6 @@ const styles = StyleSheet.create({
   colorOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
   },
   colorDot: {
     width: 14,
@@ -497,7 +552,6 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.border,
-    borderStyle: 'dashed',
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -505,6 +559,55 @@ const styles = StyleSheet.create({
   photoPlaceholderText: {
     fontSize: 14,
     color: THEME.textSecondary,
+  },
+  photoPlaceholderHint: {
+    fontSize: 12,
+    color: THEME.primaryLight,
+    marginTop: 4,
+  },
+  analyzeButton: {
+    backgroundColor: '#2563EB',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  analyzeButtonDisabled: {
+    opacity: 0.7,
+  },
+  analyzeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  analyzeButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  aiResultBadge: {
+    marginTop: 10,
+    backgroundColor: '#EFF6FF',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  aiResultLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1D4ED8',
+    marginBottom: 4,
+  },
+  aiResultText: {
+    fontSize: 13,
+    color: THEME.text,
+    lineHeight: 18,
+  },
+  aiResultHint: {
+    fontSize: 12,
+    color: THEME.textSecondary,
+    marginTop: 6,
+    fontStyle: 'italic',
   },
   saveButton: {
     backgroundColor: THEME.primary,
@@ -529,10 +632,10 @@ const styles = StyleSheet.create({
   },
   searchRow: {
     flexDirection: 'row',
-    gap: 8,
   },
   searchInput: {
     flex: 1,
+    marginRight: 8,
   },
   searchButton: {
     backgroundColor: THEME.primary,
@@ -558,12 +661,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: THEME.border,
-    gap: 10,
   },
   searchResultImage: {
     width: 40,
     height: 40,
     borderRadius: 4,
+    marginRight: 10,
   },
   searchResultInfo: {
     flex: 1,
@@ -592,11 +695,11 @@ const styles = StyleSheet.create({
   ballsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
   },
   ballsInput: {
     width: 60,
     textAlign: 'center',
+    marginRight: 10,
   },
   ballsLabel: {
     fontSize: 15,

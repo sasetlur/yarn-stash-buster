@@ -1,7 +1,7 @@
-// Copy this file to local.ts and add your Ravelry API credentials.
+// Copy this file to local.ts and add your API credentials.
 // local.ts is gitignored and will not be committed.
 //
-// To get credentials:
+// Ravelry API (required):
 // 1. Create a Ravelry account at https://www.ravelry.com
 // 2. Go to https://www.ravelry.com/pro/developer
 // 3. Create a new app with Basic Auth, read-only access
@@ -9,3 +9,10 @@
 
 export const RAVELRY_USERNAME = '';
 export const RAVELRY_PASSWORD = '';
+
+// Claude API (optional — enables AI yarn detection from photos):
+// 1. Sign up at https://console.anthropic.com
+// 2. Go to Settings > API Keys > Create Key
+// 3. Copy your key below (starts with sk-ant-)
+
+export const CLAUDE_API_KEY = '';

@@ -173,10 +173,10 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    gap: 12,
   },
   editButton: {
     flex: 1,
+    marginRight: 12,
     backgroundColor: THEME.primary,
     padding: 14,
     borderRadius: 8,

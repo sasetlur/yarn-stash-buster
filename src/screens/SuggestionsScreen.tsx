@@ -295,10 +295,10 @@ const styles = StyleSheet.create({
   },
   filterScroll: {
     paddingHorizontal: 12,
-    gap: 8,
   },
   filterChip: {
     paddingHorizontal: 14,
+    marginRight: 8,
     paddingVertical: 7,
     borderRadius: 18,
     backgroundColor: THEME.background,
@@ -363,10 +363,10 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     marginBottom: 4,
   },
   rating: {
+    marginRight: 8,
     fontSize: 12,
     color: THEME.warning,
   },
@@ -378,7 +378,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-    overflow: 'hidden',
   },
   yardage: {
     fontSize: 12,

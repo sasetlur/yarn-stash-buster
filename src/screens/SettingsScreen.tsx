@@ -83,10 +83,10 @@ const styles = StyleSheet.create({
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
   statusDot: {
     width: 8,
+    marginRight: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: THEME.success,
